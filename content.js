@@ -106,6 +106,128 @@
     }
   }
 
+  // ─── Dummy File Generators ───────────────────────────────────────────────────
+
+  // Minimal 1×1 transparent PNG
+  function makePngBytes(filename) {
+    const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], filename || "sample_image.png", { type: "image/png" });
+  }
+
+  // Minimal valid PDF (renders 1 blank page)
+  function makePdfFile(filename) {
+    const content =
+      "%PDF-1.4\n" +
+      "1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj\n" +
+      "2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj\n" +
+      "3 0 obj<</Type /Page /MediaBox [0 0 612 792]>>endobj\n" +
+      "xref\n0 4\n" +
+      "0000000000 65535 f \n" +
+      "0000000009 00000 n \n" +
+      "0000000058 00000 n \n" +
+      "0000000115 00000 n \n" +
+      "trailer<</Size 4 /Root 1 0 R>>\n" +
+      "startxref\n190\n%%EOF";
+    return new File([new TextEncoder().encode(content)], filename || "sample_document.pdf", { type: "application/pdf" });
+  }
+
+  // Minimal valid JPEG (8×8 solid grey)
+  function makeJpegFile(filename) {
+    const b64 =
+      "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkS" +
+      "Ew8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJ" +
+      "CQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy" +
+      "MjIyMjIyMjIyMjL/wAARCAAIAAgDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAA" +
+      "CAQG/8QAIRAAAQQCAgMAAAAAAAAAAAAAAQACAxESBCExUWH/xAAUAQEAAAAAAAAAAAAA" +
+      "AAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AmzpWmtb2qlrR" +
+      "OQ4dJILiS5xJJJPJJPJJJ5JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ" +
+      "JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ//Z";
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], filename || "sample_photo.jpg", { type: "image/jpeg" });
+  }
+
+  // Decide which file type to generate based on accept attr + label hints
+  function resolveFileType(el, hint) {
+    const accept = (el.getAttribute("accept") || "").toLowerCase();
+    const h = hint.toLowerCase();
+
+    if (accept.includes("image") || accept.includes(".jpg") || accept.includes(".png") || accept.includes(".jpeg")) {
+      return "image";
+    }
+    if (accept.includes(".pdf") || accept.includes("application/pdf")) {
+      return "pdf";
+    }
+    if (/\b(photo|photograph|picture|image|screenshot|logo|avatar|banner|thumbnail|snap)\b/.test(h)) {
+      return "image";
+    }
+    return "pdf"; // default to PDF for documents, reports, agreements, etc.
+  }
+
+  // Sniff max-file count from nearby DOM text like "(0/3)" or "max 3"
+  function sniffMaxFiles(el) {
+    // Explicit data attributes
+    for (const attr of ["data-max-files", "data-max", "data-maxfiles", "data-limit", "max"]) {
+      const val = parseInt(el.getAttribute(attr), 10);
+      if (!isNaN(val) && val > 0) return val;
+    }
+    // Scan nearest container's text for "(0/N)" patterns
+    const container = el.closest("div, fieldset, li, td, section") || el.parentElement;
+    if (container) {
+      const text = container.textContent || "";
+      const m = text.match(/\(\s*\d+\s*\/\s*(\d+)\s*\)/);
+      if (m) return parseInt(m[1], 10);
+      const m2 = text.match(/max\s+(\d+)\s+files?/i);
+      if (m2) return parseInt(m2[1], 10);
+    }
+    return 1;
+  }
+
+  // Build a unique filename per file index
+  function buildFilename(type, index) {
+    const suffix = index > 0 ? `_${index + 1}` : "";
+    return type === "image" ? `sample_image${suffix}.png` : `sample_document${suffix}.pdf`;
+  }
+
+  // ─── Fill a <input type="file"> ──────────────────────────────────────────────
+  function fillFileInput(el) {
+    const hint = [
+      el.name,
+      el.id,
+      el.getAttribute("aria-label"),
+      el.closest("label")?.textContent,
+      el.labels?.[0]?.textContent,
+      (() => {
+        const container = el.closest("div, fieldset, li, td, section") || el.parentElement;
+        if (!container) return "";
+        const labelEl = container.querySelector(
+          "label, legend, [class*='label'], [class*='title'], [class*='heading'], p, span, h1, h2, h3, h4, h5, h6"
+        );
+        return labelEl?.textContent?.trim() ?? container.textContent?.slice(0, 120) ?? "";
+      })()
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const fileType  = resolveFileType(el, hint);
+    const isMultiple = el.multiple;
+    const count     = isMultiple ? sniffMaxFiles(el) : 1;
+
+    const dt = new DataTransfer();
+    for (let i = 0; i < count; i++) {
+      const fname = buildFilename(fileType, i);
+      dt.items.add(fileType === "image" ? makePngBytes(fname) : makePdfFile(fname));
+    }
+
+    el.files = dt.files;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event("input",  { bubbles: true }));
+  }
+
   // ─── Trigger Native React / Vue / Angular Change Detection ───────────────────
   function nativeInputTrigger(el, value) {
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
@@ -129,8 +251,13 @@
   function fillInput(el) {
     const type = (el.type || "text").toLowerCase();
 
-    // Skip submit / button / hidden / file / reset / image / checkbox / radio
-    if (["submit", "button", "hidden", "file", "reset", "image"].includes(type)) return;
+    // Skip submit / button / hidden / reset
+    if (["submit", "button", "hidden", "reset"].includes(type)) return;
+
+    if (type === "file") {
+      fillFileInput(el);
+      return;
+    }
 
     if (type === "checkbox") {
       if (!el.checked) {
@@ -193,43 +320,59 @@
 
   // ─── Main Fill Routine ───────────────────────────────────────────────────────
   function fillAllForms() {
-    let count = 0;
+    let textCount = 0;
+    let fileCount = 0;
 
     document.querySelectorAll("input:not([disabled]):not([readonly])").forEach((el) => {
-      fillInput(el);
-      count++;
+      const type = (el.type || "text").toLowerCase();
+      if (type === "file") {
+        fillFileInput(el);
+        fileCount++;
+      } else {
+        fillInput(el);
+        if (!["submit", "button", "hidden", "reset"].includes(type)) textCount++;
+      }
     });
 
     document.querySelectorAll("textarea:not([disabled]):not([readonly])").forEach((el) => {
       fillTextarea(el);
-      count++;
+      textCount++;
     });
 
     document.querySelectorAll("select:not([disabled])").forEach((el) => {
       fillSelect(el);
-      count++;
+      textCount++;
     });
 
-    showToast(count);
+    showToast(textCount, fileCount);
   }
 
   // ─── Toast Notification ──────────────────────────────────────────────────────
-  function showToast(count) {
+  function showToast(textCount, fileCount) {
     const existing = document.getElementById("__fill_forms_toast__");
     if (existing) existing.remove();
 
+    const total = textCount + fileCount;
+    let message;
+    if (total === 0) {
+      message = "ℹ️ Fill the Forms: No fillable fields found";
+    } else {
+      const parts = [];
+      if (textCount > 0) parts.push(`${textCount} text field${textCount !== 1 ? "s" : ""}`);
+      if (fileCount  > 0) parts.push(`${fileCount} file upload${fileCount !== 1 ? "s" : ""}`);
+      message = `✅ Fill the Forms: ${parts.join(" + ")} filled`;
+    }
+
     const toast = document.createElement("div");
     toast.id = "__fill_forms_toast__";
-    toast.textContent = count > 0
-      ? `✅ Fill the Forms: ${count} field${count !== 1 ? "s" : ""} filled`
-      : `ℹ️ Fill the Forms: No fillable fields found`;
+    toast.textContent = message;
 
     Object.assign(toast.style, {
       position:        "fixed",
       bottom:          "24px",
       right:           "24px",
       zIndex:          "2147483647",
-      background:      count > 0 ? "#1a1a2e" : "#3a3a4e",
+      background:      total > 0 ? "#1a1a2e" : "#3a3a4e",
       color:           "#ffffff",
       padding:         "12px 20px",
       borderRadius:    "10px",

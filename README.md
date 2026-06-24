@@ -9,10 +9,14 @@ A Chrome Extension (Manifest V3) that intelligently fills all form fields on any
 - **Right-click → "Fill the Forms"** — available on any page or frame
 - **Smart placeholder detection** — reads `placeholder`, `name`, `id`, `aria-label`, and `<label>` text to pick contextually appropriate data
 - **Covers 20+ field types** — name, email, phone, address, city, state, zip, country, DOB, username, password, company, job title, website, subject, message, and more
+- **File upload support** — injects dummy files into `<input type="file">` fields using the `DataTransfer` API
+  - Detects image vs document context from `accept` attribute and label keywords
+  - Injects a valid PNG for photo/image fields; a valid PDF for document fields
+  - Handles `multiple` file inputs — reads `(0/N)` counter hints from sibling DOM text to fill the right number of files
 - **Type-based fallback** — if no hint is found, uses the HTML `type` attribute (`email`, `tel`, `date`, `url`, `number`, `color`, etc.)
 - **Framework-compatible** — fires `input`, `change`, and `blur` events so React, Vue, and Angular apps pick up the changes
-- **Fills all form elements** — `<input>`, `<textarea>`, `<select>`, checkboxes, and radio buttons
-- **Toast notification** — a non-intrusive toast confirms how many fields were filled
+- **Fills all form elements** — `<input>`, `<textarea>`, `<select>`, `<input type="file">`, checkboxes, and radio buttons
+- **Rich toast notification** — shows count of text fields and file uploads filled separately
 - **No external dependencies** — pure vanilla JS, zero npm packages
 
 ---
@@ -88,6 +92,9 @@ The extension resolves field values by scanning multiple hint sources in priorit
 | `website`, `url` | Sample website URL |
 | `subject`, `title` | Sample subject line |
 | `message`, `comment`, `bio`, `description` | Sample message text |
+| `photo`, `photograph`, `image`, `picture` | Dummy PNG image file |
+| Any other file upload field | Dummy PDF document |
+| Multi-file upload with `(0/N)` hint | N dummy files injected |
 
 ---
 
